@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"d7y.io/dragonfly/v2/cdn/nginx"
 	"gopkg.in/yaml.v3"
 
 	"d7y.io/dragonfly/v2/cdn/metrics"
@@ -69,6 +70,8 @@ type Config struct {
 	LogDir string `yaml:"logDir" mapstructure:"logDir"`
 	// WorkHome directory
 	WorkHome string `mapstructure:"workHome" yaml:"workHome"`
+	// Nginx configuration
+	Nginx nginx.Config `mapstructure:"nginx" yaml:"nginx"`
 }
 
 func (c *Config) String() string {

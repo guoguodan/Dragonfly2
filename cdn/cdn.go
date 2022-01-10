@@ -19,6 +19,7 @@ package cdn
 import (
 	"context"
 
+	"d7y.io/dragonfly/v2/cdn/nginx"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"golang.org/x/sync/errgroup"
@@ -45,6 +46,9 @@ type Server struct {
 
 	// GRPC server
 	grpcServer *rpcserver.Server
+
+	// Download server
+	downloadServer *nginx.Server
 
 	// Metrics server
 	metricsServer *metrics.Server
@@ -148,13 +152,12 @@ func (s *Server) Serve() error {
 
 	go func() {
 		if s.configServer != nil {
-			var rpcServerConfig = s.grpcServer.GetConfig()
 			CDNInstance, err := s.configServer.UpdateCDN(&manager.UpdateCDNRequest{
 				SourceType:   manager.SourceType_CDN_SOURCE,
 				HostName:     hostutils.FQDNHostname,
-				Ip:           rpcServerConfig.AdvertiseIP,
-				Port:         int32(rpcServerConfig.ListenPort),
-				DownloadPort: int32(rpcServerConfig.DownloadPort),
+				Ip:           s.config.RPCServer.AdvertiseIP,
+				Port:         int32(s.config.RPCServer.ListenPort),
+				DownloadPort: int32(s.config.Nginx.DownloadPort),
 				Idc:          s.config.Host.IDC,
 				Location:     s.config.Host.Location,
 				CdnClusterId: uint64(s.config.Manager.CDNClusterID),
@@ -172,8 +175,15 @@ func (s *Server) Serve() error {
 		}
 	}()
 
-	// Start grpc server
-	return s.grpcServer.ListenAndServe()
+	go func() {
+		// Start grpc server
+		if err := s.grpcServer.ListenAndServe(); err != nil {
+			logger.Fatal("start grpc server failed: %v", err)
+		}
+	}()
+
+	logger.Infof("====starting nginx====")
+	return nginx.Run(s.config.Nginx, map[string]interface{}{})
 }
 
 func (s *Server) Stop() error {
@@ -197,6 +207,9 @@ func (s *Server) Stop() error {
 	g.Go(func() error {
 		// Stop grpc server
 		return s.grpcServer.Shutdown()
+	})
+	g.Go(func() error {
+		return s.
 	})
 	return g.Wait()
 }
